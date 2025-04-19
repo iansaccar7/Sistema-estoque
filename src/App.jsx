@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { Package2, Plus, Minus, PackageCheck, PackageX } from "lucide-react";
+import {
+  Package2,
+  Plus,
+  Minus,
+  PackageCheck,
+  PackageX,
+  Filter,
+  X,
+} from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 
 const MODELOS_TAMPAS = [
@@ -57,7 +65,15 @@ const API_URL = import.meta.env.VITE_API_URL;
 
 function App() {
   const [caps, setCaps] = useState([]);
+  const [movimentos, setMovimentos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMovimentos, setLoadingMovimentos] = useState(true);
+  const [filtros, setFiltros] = useState({
+    dataInicio: "",
+    dataFim: "",
+    tipo: "",
+    operacao: "",
+  });
   const [novoMovimento, setNovoMovimento] = useState({
     tipo: "",
     cor: "",
@@ -68,6 +84,7 @@ function App() {
 
   useEffect(() => {
     fetchCaps();
+    fetchMovimentos();
   }, []);
 
   async function fetchCaps() {
@@ -81,6 +98,29 @@ function App() {
       toast.error("Erro ao carregar o estoque");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fetchMovimentos() {
+    try {
+      const queryParams = new URLSearchParams();
+      if (filtros.dataInicio)
+        queryParams.append("dataInicio", filtros.dataInicio);
+      if (filtros.dataFim) queryParams.append("dataFim", filtros.dataFim);
+      if (filtros.tipo) queryParams.append("tipo", filtros.tipo);
+      if (filtros.operacao) queryParams.append("operacao", filtros.operacao);
+
+      const response = await fetch(
+        `${API_URL}/api/tampas/movimentos?${queryParams}`
+      );
+      if (!response.ok) throw new Error("Erro ao buscar movimentos");
+      const data = await response.json();
+      setMovimentos(data);
+    } catch (error) {
+      console.error("Erro ao buscar movimentos:", error);
+      toast.error("Erro ao carregar movimentos");
+    } finally {
+      setLoadingMovimentos(false);
     }
   }
 
@@ -109,7 +149,7 @@ function App() {
           body: JSON.stringify({
             tipo,
             cor,
-            peso: existingCap.peso, // ou um valor fixo se não for relevante na saída
+            peso: existingCap.peso,
             quantidade,
             operacao,
           }),
@@ -137,6 +177,7 @@ function App() {
         } registrada com sucesso!`
       );
       fetchCaps();
+      fetchMovimentos();
       setNovoMovimento({
         tipo: "",
         cor: "",
@@ -150,6 +191,39 @@ function App() {
     }
   }
 
+  const handleFiltrar = (e) => {
+    e.preventDefault();
+    fetchMovimentos();
+  };
+
+  const handleLimparFiltros = () => {
+    setFiltros({
+      dataInicio: "",
+      dataFim: "",
+      tipo: "",
+      operacao: "",
+    });
+    fetchMovimentos();
+  };
+
+  const calcularTotais = () => {
+    return movimentos.reduce(
+      (acc, mov) => {
+        const quantidade =
+          mov.operacao === "entrada" ? mov.quantidade : -mov.quantidade;
+        return {
+          entradas:
+            acc.entradas + (mov.operacao === "entrada" ? mov.quantidade : 0),
+          saidas: acc.saidas + (mov.operacao === "saida" ? mov.quantidade : 0),
+          total: acc.total + quantidade,
+        };
+      },
+      { entradas: 0, saidas: 0, total: 0 }
+    );
+  };
+
+  const totais = calcularTotais();
+
   return (
     <div className="min-vh-100 bg-light">
       <Toaster position="top-right" />
@@ -160,7 +234,7 @@ function App() {
           <div className="d-flex align-items-center gap-3">
             <Package2 size={32} />
             <div>
-              <h1 className="h3 mb-0">Technoveda Tampas e Moldes Ltda</h1>
+              <h1 className="h3 mb-0">Minha Empresa</h1>
               <p className="mb-0 text-white-50">
                 Sistema de Controle de Estoque
               </p>
@@ -294,6 +368,163 @@ function App() {
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+
+        {/* Filtros e Movimentos */}
+        <div className="card mb-4">
+          <div className="card-header d-flex justify-content-between align-items-center">
+            <h2 className="card-title mb-0">Movimentos</h2>
+            <div className="d-flex gap-2">
+              <span className="badge bg-success">
+                Entradas: {totais.entradas}
+              </span>
+              <span className="badge bg-danger">Saídas: {totais.saidas}</span>
+              <span className="badge bg-primary">Total: {totais.total}</span>
+            </div>
+          </div>
+          <div className="card-body">
+            <form onSubmit={handleFiltrar} className="row g-3 mb-4">
+              <div className="col-md-3">
+                <label className="form-label">Data Início</label>
+                <input
+                  type="date"
+                  className="form-control"
+                  value={filtros.dataInicio}
+                  onChange={(e) =>
+                    setFiltros({ ...filtros, dataInicio: e.target.value })
+                  }
+                />
+              </div>
+              <div className="col-md-3">
+                <label className="form-label">Data Fim</label>
+                <input
+                  type="date"
+                  className="form-control"
+                  value={filtros.dataFim}
+                  onChange={(e) =>
+                    setFiltros({ ...filtros, dataFim: e.target.value })
+                  }
+                />
+              </div>
+              <div className="col-md-3">
+                <label className="form-label">Tipo</label>
+                <select
+                  className="form-select"
+                  value={filtros.tipo}
+                  onChange={(e) =>
+                    setFiltros({ ...filtros, tipo: e.target.value })
+                  }
+                >
+                  <option value="">Todos</option>
+                  {MODELOS_TAMPAS.map((modelo) => (
+                    <option key={modelo} value={modelo}>
+                      {modelo}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-md-2">
+                <label className="form-label">Operação</label>
+                <select
+                  className="form-select"
+                  value={filtros.operacao}
+                  onChange={(e) =>
+                    setFiltros({ ...filtros, operacao: e.target.value })
+                  }
+                >
+                  <option value="">Todas</option>
+                  <option value="entrada">Entradas</option>
+                  <option value="saida">Saídas</option>
+                </select>
+              </div>
+              <div className="col-md-1 d-flex gap-2">
+                <div>
+                  <label className="form-label">&nbsp;</label>
+                  <button type="submit" className="btn btn-primary w-100">
+                    <Filter size={20} />
+                  </button>
+                </div>
+                <div>
+                  <label className="form-label">&nbsp;</label>
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary w-100"
+                    onClick={handleLimparFiltros}
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+            </form>
+
+            <div className="table-responsive">
+              <table className="table table-striped table-hover mb-0">
+                <thead>
+                  <tr>
+                    <th>Data</th>
+                    <th>Tipo</th>
+                    <th>Cor</th>
+                    <th>Operação</th>
+                    <th>Quantidade</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loadingMovimentos ? (
+                    <tr>
+                      <td colSpan={5} className="text-center">
+                        <div
+                          className="spinner-border text-primary"
+                          role="status"
+                        >
+                          <span className="visually-hidden">Carregando...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : movimentos.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="text-center text-muted">
+                        Nenhum movimento encontrado
+                      </td>
+                    </tr>
+                  ) : (
+                    movimentos.map((movimento) => (
+                      <tr key={movimento.id}>
+                        <td>
+                          {new Date(movimento.created_at).toLocaleDateString()}
+                        </td>
+                        <td>{movimento.tipo}</td>
+                        <td>
+                          <div className="d-flex align-items-center">
+                            <div
+                              className="color-preview"
+                              style={{
+                                backgroundColor: movimento.cor.toLowerCase(),
+                              }}
+                            />
+                            {movimento.cor}
+                          </div>
+                        </td>
+                        <td>
+                          <span
+                            className={`badge ${
+                              movimento.operacao === "entrada"
+                                ? "bg-success"
+                                : "bg-danger"
+                            }`}
+                          >
+                            {movimento.operacao === "entrada"
+                              ? "Entrada"
+                              : "Saída"}
+                          </span>
+                        </td>
+                        <td>{movimento.quantidade}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
